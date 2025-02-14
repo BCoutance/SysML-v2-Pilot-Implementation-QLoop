@@ -299,6 +299,11 @@ public class FeatureUtil {
 	// Feature values
 	
 	public static FeatureValue getValuationFor(Feature feature) {
+//		for (int i = 0; i < feature.getOwnedMembership().size(); i++) {
+//			Membership memb = feature.getOwnedMembership().get(i);
+//			boolean isit = FeatureValue.class.isInstance(memb);
+//		}
+//		Check if Feature has associated FeatureValue, if not returns null		
 		return (FeatureValue)feature.getOwnedMembership().stream().
 				filter(FeatureValue.class::isInstance).
 				findFirst().orElse(null);

@@ -29,18 +29,24 @@
  *****************************************************************************/
 package org.omg.sysml.interactive;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
 import java.util.List;
 import java.util.Scanner;
 import java.util.stream.Collectors;
-
 import org.eclipse.emf.common.util.BasicEList;
+import org.eclipse.emf.common.util.URI;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.ecore.resource.URIConverter;
 import org.eclipse.xtext.nodemodel.ICompositeNode;
 import org.eclipse.xtext.nodemodel.util.NodeModelUtils;
 import org.eclipse.xtext.parser.IParseResult;
@@ -82,45 +88,45 @@ import com.google.inject.Inject;
 import com.google.inject.Injector;
 
 public class SysMLInteractive extends SysMLUtil {
-	
+
 	public static final String KERNEL_LIBRARIES_DIRECTORY = "Kernel Libraries";
 	public static final String SYSTEMS_LIBRARY_DIRECTORY = "Systems Library";
 	public static final String DOMAIN_LIBRARIES_DIRECTORY = "Domain Libraries";
 
 	public static final String KERML_EXTENSION = ".kerml";
 	public static final String SYSML_EXTENSION = ".sysml";
-	
+
 	protected static Injector injector;
 	protected static SysMLInteractive instance = null;
-		
+
 	protected String apiBasePath = ApiElementProcessingFacade.DEFAULT_BASE_PATH;
-	
+
 	protected int counter = 1;
 	protected XtextResource resource;
-	
-	protected Traversal traversal;
-	
-    protected SysML2PlantUMLSvc sysml2PlantUMLSvc;
-    
-    private Resource dummyResource;
 
-    @Inject
+	protected Traversal traversal;
+
+	protected SysML2PlantUMLSvc sysml2PlantUMLSvc;
+
+	private Resource dummyResource;
+
+	@Inject
 	private IGlobalScopeProvider scopeProvider;
-	
+
 	@Inject
 	private KerMLQualifiedNameConverter qualifiedNameConverter;
-	
+
 	@Inject
 	private IResourceValidator validator;
-	
+
 	@Inject
 	private ILibraryIndexProvider libraryIndexCache;
-	
+
 	@Inject
 	private SysMLInteractive() {
 		super(new StrictShadowingResourceDescriptionData());
 	}
-	
+
 	public void loadLibrary(String path) {
 		if (path != null) {
 			if (!path.endsWith("/")) {
@@ -132,25 +138,25 @@ public class SysMLInteractive extends SysMLUtil {
 			this.readAll(path + DOMAIN_LIBRARIES_DIRECTORY, false, SYSML_EXTENSION);
 		}
 	}
-	
+
 	public void setApiBasePath(String apiBasePath) {
 		this.apiBasePath = apiBasePath;
 	}
-	
+
 	public int next() {
-		this.resource = (XtextResource)this.createResource(counter + SYSML_EXTENSION);
+		this.resource = (XtextResource) this.createResource(counter + SYSML_EXTENSION);
 		this.addInputResource(this.resource);
 		return this.counter++;
 	}
-	
+
 	public XtextResource getResource() {
 		return this.resource;
 	}
-	
+
 	public ILibraryIndexProvider getLibraryIndexCache() {
 		return libraryIndexCache;
 	}
-	
+
 	public void removeResource() {
 		if (this.resource != null) {
 			try {
@@ -161,30 +167,30 @@ public class SysMLInteractive extends SysMLUtil {
 			}
 		}
 	}
-	
+
 	public Element getRootElement() {
 		XtextResource resource = this.getResource();
 		if (resource == null) {
 			return null;
 		} else {
 			final IParseResult result = resource.getParseResult();
-			return result == null? null: (Element)result.getRootASTElement();
+			return result == null ? null : (Element) result.getRootASTElement();
 		}
 	}
-	
+
 	public void parse(String input) throws IOException {
 		XtextResource resource = this.getResource();
 		if (resource != null) {
 			resource.reparse(input);
 		}
 	}
-	
+
 	public List<Issue> validate() {
 		XtextResource resource = this.getResource();
-		return resource == null? Collections.emptyList():
-			validator.validate(resource, CheckMode.ALL, CancelIndicator.NullImpl);
+		return resource == null ? Collections.emptyList()
+				: validator.validate(resource, CheckMode.ALL, CancelIndicator.NullImpl);
 	}
-	
+
 	private Resource getDummyResource() {
 		if (this.dummyResource == null) {
 			this.dummyResource = this.createResource("dummy" + SYSML_EXTENSION);
@@ -192,26 +198,23 @@ public class SysMLInteractive extends SysMLUtil {
 		}
 		return this.dummyResource;
 	}
-	
+
 	public Element resolve(String name) {
-		IScope scope = scopeProvider.getScope(
-				this.getDummyResource(), 
-				SysMLPackage.eINSTANCE.getNamespace_Member(), 
+		IScope scope = scopeProvider.getScope(this.getDummyResource(), SysMLPackage.eINSTANCE.getNamespace_Member(),
 				Predicates.alwaysTrue());
-		IEObjectDescription description = scope.getSingleElement(
-				this.qualifiedNameConverter.toQualifiedName(name));
+		IEObjectDescription description = scope.getSingleElement(this.qualifiedNameConverter.toQualifiedName(name));
 		if (description == null) {
 			return null;
 		} else {
 			EObject object = description.getEObjectOrProxy();
-			return object instanceof Element? (Element)object: null;
+			return object instanceof Element ? (Element) object : null;
 		}
 	}
-	
+
 	public SysMLInteractiveResult process(String input) {
 		return process(input, true);
 	}
-	
+
 	public SysMLInteractiveResult process(String input, boolean isAddResource) {
 		this.next();
 		try {
@@ -230,29 +233,28 @@ public class SysMLInteractive extends SysMLUtil {
 			return new SysMLInteractiveResult(e);
 		}
 	}
-	
+
 	public String help(String command, List<String> help) {
 		this.counter++;
 		if (Strings.isNullOrEmpty(command)) {
-			return help.isEmpty()? SysMLInteractiveHelp.getGeneralHelp(): SysMLInteractiveHelp.getHelpHelp();
+			return help.isEmpty() ? SysMLInteractiveHelp.getGeneralHelp() : SysMLInteractiveHelp.getHelpHelp();
 		}
 		if (!command.startsWith("%")) {
 			command = "%" + command;
 		}
 		String helpString = SysMLInteractiveHelp.getHelpString(command);
-		return helpString == null? SysMLInteractiveHelp.getGeneralHelp(): helpString;
+		return helpString == null ? SysMLInteractiveHelp.getGeneralHelp() : helpString;
 	}
-	
+
 	public String help(String command) {
-		return "-h".equals(command)? 
-				help(null, Collections.singletonList("true")):
-				help(command, Collections.emptyList());
+		return "-h".equals(command) ? help(null, Collections.singletonList("true"))
+				: help(command, Collections.emptyList());
 	}
-	
+
 	public String eval(String input, String targetName, List<String> help) {
 		if (Strings.isNullOrEmpty(input)) {
 			this.counter++;
-			return help.isEmpty()? "": SysMLInteractiveHelp.getEvalHelp();
+			return help.isEmpty() ? "" : SysMLInteractiveHelp.getEvalHelp();
 		}
 		if (input == null || input.isEmpty()) {
 			this.counter++;
@@ -273,36 +275,33 @@ public class SysMLInteractive extends SysMLUtil {
 		if (result.hasErrors()) {
 			return result.toString();
 		} else {
-			Type calc = (Type)((Namespace)result.getRootElement()).getOwnedMember().get(0);
-			Expression expr = (Expression)TypeUtil.getFeatureByMembershipIn(calc, ResultExpressionMembership.class);
+			Type calc = (Type) ((Namespace) result.getRootElement()).getOwnedMember().get(0);
+			Expression expr = (Expression) TypeUtil.getFeatureByMembershipIn(calc, ResultExpressionMembership.class);
 			List<Element> elements = ExpressionEvaluator.INSTANCE.evaluate(expr, target);
 			this.removeResource();
-			return elements == null? "": 
-				elements.stream().map(SysMLInteractiveUtil::formatElement).collect(Collectors.joining());
+			return elements == null ? ""
+					: elements.stream().map(SysMLInteractiveUtil::formatElement).collect(Collectors.joining());
 		}
 	}
-	
+
 	public String eval(String input, String targetName) {
-		return "-h".equals(input)? 
-				eval(null, null, Collections.singletonList("true")):
-				eval(input, targetName, Collections.emptyList());
+		return "-h".equals(input) ? eval(null, null, Collections.singletonList("true"))
+				: eval(input, targetName, Collections.emptyList());
 	}
-	
+
 	public String listLibrary() {
 		this.counter++;
 		try {
-			List<Membership> globalMemberships = 
-					this.getLibraryResources().stream().
-					flatMap(r->r.getContents().stream()).
-					filter(Namespace.class::isInstance).
-					flatMap(n->((Namespace)n).visibleMemberships(new BasicEList<>(), false, false).stream()).
-					collect(Collectors.toList());
+			List<Membership> globalMemberships = this.getLibraryResources().stream()
+					.flatMap(r -> r.getContents().stream()).filter(Namespace.class::isInstance)
+					.flatMap(n -> ((Namespace) n).visibleMemberships(new BasicEList<>(), false, false).stream())
+					.collect(Collectors.toList());
 			return SysMLInteractiveUtil.formatMembershipList(globalMemberships);
 		} catch (Exception e) {
 			return SysMLInteractiveUtil.formatException(e);
 		}
 	}
-	
+
 	public String listQuery(String query) {
 		if (!query.endsWith(";")) {
 			query += ";";
@@ -311,41 +310,36 @@ public class SysMLInteractive extends SysMLUtil {
 		if (result.hasErrors()) {
 			return result.toString();
 		} else {
-			List<Membership> memberships = ((Namespace)result.getRootElement()).getImportedMembership();
+			List<Membership> memberships = ((Namespace) result.getRootElement()).getImportedMembership();
 			this.removeResource();
 			return SysMLInteractiveUtil.formatMembershipList(memberships);
 		}
 	}
-	
+
 	public String list(String query, List<String> help) {
-		return Strings.isNullOrEmpty(query)? 
-					!help.isEmpty()? SysMLInteractiveHelp.getListHelp():
-					listLibrary(): 
-				listQuery(query);
+		return Strings.isNullOrEmpty(query) ? !help.isEmpty() ? SysMLInteractiveHelp.getListHelp() : listLibrary()
+				: listQuery(query);
 	}
-	
+
 	protected String list(String query) {
-		return "-h".equals(query)? 
-				list(null, Collections.singletonList("true")):
-				list(query, Collections.emptyList());
+		return "-h".equals(query) ? list(null, Collections.singletonList("true"))
+				: list(query, Collections.emptyList());
 	}
-	
+
 	public Object show(String name, List<String> styles, List<String> help) {
 		this.counter++;
 		if (Strings.isNullOrEmpty(name)) {
-			return help.isEmpty()? "": SysMLInteractiveHelp.getShowHelp();
+			return help.isEmpty() ? "" : SysMLInteractiveHelp.getShowHelp();
 		}
 		try {
 			Element element = this.resolve(name);
 			if (element == null) {
 				return "ERROR:Couldn't resolve reference to Element '" + name + "'\n";
-			}
-			else if (matchStyle(styles, "JSON")) {
+			} else if (matchStyle(styles, "JSON")) {
 				JsonElementProcessingFacade processingFacade = this.getJsonElementProcessingFacade();
 				processingFacade.getTraversal().visit(element);
 				return processingFacade.toJsonTree();
-			}
-			else if (styles.isEmpty() || matchStyle(styles, "TREE")){
+			} else if (styles.isEmpty() || matchStyle(styles, "TREE")) {
 				return SysMLInteractiveUtil.formatTree(element);
 			} else {
 				return "ERROR:Invalid style. Possible styles: TREE and JSON";
@@ -358,7 +352,7 @@ public class SysMLInteractive extends SysMLUtil {
 	public Object export(String name, List<String> help) {
 		this.counter++;
 		if (Strings.isNullOrEmpty(name)) {
-			return help.isEmpty()? "": SysMLInteractiveHelp.getExportHelp();
+			return help.isEmpty() ? "" : SysMLInteractiveHelp.getExportHelp();
 		}
 		try {
 			Element element = this.resolve(name);
@@ -372,7 +366,7 @@ public class SysMLInteractive extends SysMLUtil {
 			return SysMLInteractiveUtil.formatException(e);
 		}
 	}
-	
+
 	public String show(String name) {
 		if (name.startsWith("--style=")) {
 			int i = name.indexOf(" ");
@@ -382,15 +376,14 @@ public class SysMLInteractive extends SysMLUtil {
 				return show(name, Collections.singletonList(style), Collections.emptyList()).toString() + "\n";
 			}
 		}
-		return (String) ("-h".equals(name)? 
-				show(null, Collections.emptyList(), Collections.singletonList("true")):
-				show(name, Collections.emptyList(), Collections.emptyList()));
+		return (String) ("-h".equals(name) ? show(null, Collections.emptyList(), Collections.singletonList("true"))
+				: show(name, Collections.emptyList(), Collections.emptyList()));
 	}
-	
+
 	public String publish(String name, List<String> help) {
 		this.counter++;
 		if (Strings.isNullOrEmpty(name)) {
-			return help.isEmpty()? "": SysMLInteractiveHelp.getPublishHelp();
+			return help.isEmpty() ? "" : SysMLInteractiveHelp.getPublishHelp();
 		}
 		try {
 			Element element = this.resolve(name);
@@ -410,163 +403,214 @@ public class SysMLInteractive extends SysMLUtil {
 			return SysMLInteractiveUtil.formatException(e);
 		}
 	}
-	
+
 	protected String publish(String name) {
-		return "-h".equals(name)? 
-				publish(null, Collections.singletonList("true")):
-				publish(name, Collections.emptyList());
+		return "-h".equals(name) ? publish(null, Collections.singletonList("true"))
+				: publish(name, Collections.emptyList());
 	}
-	
+
 	protected ApiElementProcessingFacade getApiElementProcessingFacade(String modelName) {
 		System.out.println("API base path: " + this.apiBasePath);
-		ApiElementProcessingFacade processingFacade = new ApiElementProcessingFacade(modelName, this.apiBasePath);	
+		ApiElementProcessingFacade processingFacade = new ApiElementProcessingFacade(modelName, this.apiBasePath);
 		processingFacade.setIsIncludeDerived(true);
 		processingFacade.setTraversal(new Traversal(processingFacade));
 		return processingFacade;
 	}
-	
+
 	protected JsonElementProcessingFacade getJsonElementProcessingFacade() {
-		JsonElementProcessingFacade processingFacade = new JsonElementProcessingFacade();	
+		JsonElementProcessingFacade processingFacade = new JsonElementProcessingFacade();
 		processingFacade.setIsIncludeDerived(true);
 		processingFacade.setTraversal(new Traversal(processingFacade));
 		return processingFacade;
 	}
-	
+
 	public VizResult view(String name, List<String> renders, List<String> styles, List<String> help) {
 		this.counter++;
-        if (!help.isEmpty()
-                || (name == null && renders.isEmpty() && styles.isEmpty())) {
-                return VizResult.textResult(SysMLInteractiveHelp.getViewHelp());
-        }
-        if (name == null) {
-        	return VizResult.emptyResult();
-        }
+		if (!help.isEmpty() || (name == null && renders.isEmpty() && styles.isEmpty())) {
+			return VizResult.textResult(SysMLInteractiveHelp.getViewHelp());
+		}
+		if (name == null) {
+			return VizResult.emptyResult();
+		}
 		Element element = this.resolve(name);
 		if (element == null) {
 			return VizResult.unresolvedResult(name);
 		} else if (!(element instanceof ViewUsage)) {
 			return VizResult.vizExceptionResult("ERROR:'" + name + "' is not a view\n");
 		}
-    	ViewUsage viewSpec = (ViewUsage)element;
-    	RenderingUsage rendering = viewSpec.getViewRendering();
-    	if (rendering != null) {
-    		String renderingName = rendering.getName();
-    		if ("asTreeDiagram".equals(renderingName)) {
-    			renders.add(0, "TREE");
-    		} else if ("asInterconnectionDiagram".equals(renderingName)) {
-    			renders.add(0, "INTERCONNECTION");
-    		} else {
-    			return VizResult.vizExceptionResult("ERROR:Rendering " + renderingName + " is not a supported\n");
-    		}
-    	}
-    	List<EObject> elements = new ArrayList<>();
-    	elements.addAll(viewSpec.getExposedElement());
-    	return viz(elements, renders, styles);
+		ViewUsage viewSpec = (ViewUsage) element;
+		RenderingUsage rendering = viewSpec.getViewRendering();
+		if (rendering != null) {
+			String renderingName = rendering.getName();
+			if ("asTreeDiagram".equals(renderingName)) {
+				renders.add(0, "TREE");
+			} else if ("asInterconnectionDiagram".equals(renderingName)) {
+				renders.add(0, "INTERCONNECTION");
+			} else {
+				return VizResult.vizExceptionResult("ERROR:Rendering " + renderingName + " is not a supported\n");
+			}
+		}
+		List<EObject> elements = new ArrayList<>();
+		elements.addAll(viewSpec.getExposedElement());
+		return viz(elements, renders, styles);
 	}
-	
+
 	protected VizResult view(String name) {
-		return "-h".equals(name)? 
-				this.view(null, new ArrayList<String>(), Collections.emptyList(), Collections.singletonList("true")):
-				this.view(name, new ArrayList<String>(), Collections.singletonList("PUMLCODE"), Collections.emptyList());
+		return "-h".equals(name)
+				? this.view(null, new ArrayList<String>(), Collections.emptyList(), Collections.singletonList("true"))
+				: this.view(name, new ArrayList<String>(), Collections.singletonList("PUMLCODE"),
+						Collections.emptyList());
 	}
-	
+
 	public VizResult viz(List<String> names, List<String> views, List<String> styles, List<String> help) {
 		this.counter++;
-        if (!help.isEmpty()
-            || (names.isEmpty() && views.isEmpty() && styles.isEmpty())) {
-            return VizResult.textResult(SysMLInteractiveHelp.getVizHelp());
-        }
-        List<EObject> elements = new ArrayList<EObject>(names.size());
-        for (String name: names) {
-            Element element = this.resolve(name);
-            if (element != null) {
-                elements.add(element);
-            } else {
-                return VizResult.unresolvedResult(name);
-            }
-        }
-        return viz(elements, views, styles);
+		if (!help.isEmpty() || (names.isEmpty() && views.isEmpty() && styles.isEmpty())) {
+			return VizResult.textResult(SysMLInteractiveHelp.getVizHelp());
+		}
+		List<EObject> elements = new ArrayList<EObject>(names.size());
+		for (String name : names) {
+			Element element = this.resolve(name);
+			if (element != null) {
+				elements.add(element);
+			} else {
+				return VizResult.unresolvedResult(name);
+			}
+		}
+		return viz(elements, views, styles);
 	}
-	
+
 	protected VizResult viz(List<EObject> elements, List<String> views, List<String> styles) {
-        if (elements.isEmpty()) {
-        	return VizResult.emptyResult();
-        } else {
-        	try {
-        		SysML2PlantUMLSvc svc = getSysML2PlantUMLSvc();
-        		if (!views.isEmpty()) {
-        			String view = views.get(0);
-        			svc.setView(view);
-        		}
-        		List<String> fStyles = filterStyle(styles, "PUMLCODE");
-        		if (fStyles.size() != styles.size()) {
-        			// --style PUMLCODE option
-        			return VizResult.plantumlResult(svc.getPlantUMLCode(elements, fStyles));
-        		} else {
-        			return VizResult.svgResult(svc.getSVG(elements, fStyles));
-        		}
-        	} catch (Exception e) {
-        		return VizResult.exceptionResult(e);
-        	}
-        }
+		if (elements.isEmpty()) {
+			return VizResult.emptyResult();
+		} else {
+			try {
+				SysML2PlantUMLSvc svc = getSysML2PlantUMLSvc();
+				if (!views.isEmpty()) {
+					String view = views.get(0);
+					svc.setView(view);
+				}
+				List<String> fStyles = filterStyle(styles, "PUMLCODE");
+				if (fStyles.size() != styles.size()) {
+					// --style PUMLCODE option
+					return VizResult.plantumlResult(svc.getPlantUMLCode(elements, fStyles));
+				} else {
+					return VizResult.svgResult(svc.getSVG(elements, fStyles));
+				}
+			} catch (Exception e) {
+				return VizResult.exceptionResult(e);
+			}
+		}
 	}
-	
+
 	protected VizResult viz(String name) {
-		return "-h".equals(name)? 
-				this.viz(Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), Collections.singletonList("true")):
-				this.viz(Collections.singletonList(name), Collections.emptyList(), Collections.singletonList("PUMLCODE"), Collections.emptyList());
+		return "-h".equals(name)
+				? this.viz(Collections.emptyList(), Collections.emptyList(), Collections.emptyList(),
+						Collections.singletonList("true"))
+				: this.viz(Collections.singletonList(name), Collections.emptyList(),
+						Collections.singletonList("PUMLCODE"), Collections.emptyList());
 	}
-	
-    private static List<String> filterStyle(List<String> styles, String name) {
-        return styles.stream()
-            .filter(x -> !x.toUpperCase().equals(name))
-            .collect(Collectors.toList());
-    }
-	
-    private static boolean matchStyle(List<String> styles, String name) {
-        return styles.stream()
-            .anyMatch(x -> x.toUpperCase().equals(name));
-    }
 
-    private class LinkProvider implements SysML2PlantUMLLinkProvider {
-        @Override
-        public String getLinkString(EObject eObj) {
-            if (!(eObj instanceof Element)) return null;
-            Element e = (Element) eObj;
-            String id = e.getElementId();
-            if (id == null) return null;
-            return "psysml:" + id;
-        }
+	private static List<String> filterStyle(List<String> styles, String name) {
+		return styles.stream().filter(x -> !x.toUpperCase().equals(name)).collect(Collectors.toList());
+	}
 
-        @Override
-        public String getText(EObject eObj) {
-            ICompositeNode node = NodeModelUtils.getNode(eObj);
-            if (node == null) return null;
-            return node.getText();
-        }
-    }
+	private static boolean matchStyle(List<String> styles, String name) {
+		return styles.stream().anyMatch(x -> x.toUpperCase().equals(name));
+	}
 
-    protected SysML2PlantUMLSvc getSysML2PlantUMLSvc() {
-        if (sysml2PlantUMLSvc == null) {
-            sysml2PlantUMLSvc = new SysML2PlantUMLSvc(new LinkProvider());
-        }
-        return sysml2PlantUMLSvc;
-    }
+	private class LinkProvider implements SysML2PlantUMLLinkProvider {
+		@Override
+		public String getLinkString(EObject eObj) {
+			if (!(eObj instanceof Element))
+				return null;
+			Element e = (Element) eObj;
+			String id = e.getElementId();
+			if (id == null)
+				return null;
+			return "psysml:" + id;
+		}
+
+		@Override
+		public String getText(EObject eObj) {
+			ICompositeNode node = NodeModelUtils.getNode(eObj);
+			if (node == null)
+				return null;
+			return node.getText();
+		}
+	}
+
+	protected SysML2PlantUMLSvc getSysML2PlantUMLSvc() {
+		if (sysml2PlantUMLSvc == null) {
+			sysml2PlantUMLSvc = new SysML2PlantUMLSvc(new LinkProvider());
+		}
+		return sysml2PlantUMLSvc;
+	}
 
 	public void setGraphVizPath(String path) {
 		getSysML2PlantUMLSvc().setGraphVizPath(path);
 	}
-	
+
 	public void run(String input) {
 		if (input != null && !input.isEmpty()) {
 			System.out.print(this.process(input));
 		}
 	}
 	
+	public void readDirectory (File directory){
+		for (File sibling: directory.listFiles()) {
+			if (sibling.isDirectory()) {
+				readDirectory(sibling);
+			} else {
+		    	URI uri = URI.createFileURI(sibling.getPath());
+		    	URIConverter theURIConverter = this.getResourceSet().getURIConverter();
+		    	URI normalizedURI = theURIConverter.normalize(uri);
+		    	for (Resource resource : this.getResourceSet().getResources())
+		    	{
+		    		if (theURIConverter.normalize(resource.getURI()).equals(normalizedURI)) 
+		    		{
+		    			this.getResourceSet().getResources().remove(resource);
+		    			break; //without it, the getResources() from the for loop sends ConcurrentModificationException 
+		    		}
+		    	}
+		    	this.readAll(sibling, true);
+		    	// All the resources read from the first path are considered to be input resources. 
+			    // All the resources read from the other paths are considered to be library resources. 
+			    // Hence the "true" argument in readAll
+				}
+	    }			
+	}
+	
+	public SysMLInteractiveResult load(String input) throws IOException {
+		SysMLInteractiveResult result = null;
+		this.next();
+		
+		File directory = (new File(input)).getParentFile();
+	    readDirectory(directory);
+	   
+	    final InputStream inStream = Files.newInputStream(Path.of(input), StandardOpenOption.READ);
+		XtextResource resource = this.getResource();
+		if (resource != null) {
+			resource.load(inStream, Collections.emptyMap());
+			List<Issue> issues = this.validate();
+			Element rootElement = this.getRootElement();
+			result = new SysMLInteractiveResult(rootElement, issues);
+			if (result.hasErrors()) {
+	            System.out.println("ERROR: parsing failed : ");
+	            for (Issue issue : issues) {
+	            	System.out.println(issue);
+	            }
+	            this.removeResource();
+	        } else {
+	            this.addResourceToIndex(resource);
+	        }
+		}
+		return result;
+	}
+
 	public void run() {
-        try (Scanner in = new Scanner(System.in)) {
-	        do {
-	        	try {
+		try (Scanner in = new Scanner(System.in)) {
+			do {
+				try {
 					System.out.print(this.counter + "> ");
 					String input = in.nextLine().trim();
 					if (input.startsWith("%")) {
@@ -584,9 +628,9 @@ public class SysMLInteractive extends SysMLUtil {
 							run(input);
 						} else {
 							int i = input.indexOf(' ');
-							String command = i == -1? input: input.substring(0, i);
-							String argument = i == -1? "": input.substring(i + 1).trim();
-							
+							String command = i == -1 ? input : input.substring(0, i);
+							String argument = i == -1 ? "" : input.substring(i + 1).trim();
+
 							if ("%exit".equals(command)) {
 								break;
 							} else if ("%help".equals(command)) {
@@ -609,14 +653,18 @@ public class SysMLInteractive extends SysMLUtil {
 								if (!"".equals(argument)) {
 									System.out.print(this.view(argument));
 								}
+							} else if ("%load".equals(command)) {
+								if (!"".equals(argument)) {
+									this.load(argument);
+								}
 							} else if ("%eval".equals(command)) {
 								if (!"".equals(argument)) {
 									String name = null;
 									if (argument.startsWith("--target ") || argument.startsWith("--target=")) {
 										argument = argument.substring(9);
-					        			i = argument.indexOf(' ');
-					        			name = i == -1? argument: argument.substring(0, i);
-					        			argument = i == -1? null: argument.substring(i + 1).trim();
+										i = argument.indexOf(' ');
+										name = i == -1 ? argument : argument.substring(0, i);
+										argument = i == -1 ? null : argument.substring(i + 1).trim();
 									}
 									System.out.print(eval(argument, name));
 								}
@@ -630,10 +678,10 @@ public class SysMLInteractive extends SysMLUtil {
 				} catch (Exception e) {
 					e.printStackTrace();
 				}
-	        } while(true);
-        }
-    }
-	
+			} while (true);
+		}
+	}
+
 	public static SysMLInteractive createInstance() {
 		if (injector == null) {
 			// Note: An EPackage must be registered to be sure the correctly configured
@@ -644,14 +692,14 @@ public class SysMLInteractive extends SysMLUtil {
 		}
 		return injector.getInstance(SysMLInteractive.class);
 	}
-	
+
 	public static SysMLInteractive getInstance() {
 		if (instance == null) {
 			instance = createInstance();
 		}
 		return instance;
 	}
-	
+
 	public static void main(String[] args) {
 		System.out.println("SysML v2 Pilot Implementation");
 		SysMLInteractive instance = getInstance();
@@ -661,7 +709,7 @@ public class SysMLInteractive extends SysMLUtil {
 				instance.setApiBasePath(args[1]);
 			}
 		}
-		instance.run();	
+		instance.run();
 	}
 
 }

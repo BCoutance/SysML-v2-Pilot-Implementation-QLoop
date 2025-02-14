@@ -43,6 +43,7 @@ import org.omg.sysml.lang.sysml.LiteralString;
 import org.omg.sysml.lang.sysml.MetadataAccessExpression;
 import org.omg.sysml.lang.sysml.MetadataFeature;
 import org.omg.sysml.lang.sysml.NullExpression;
+import org.omg.sysml.lang.sysml.ReferenceUsage;
 import org.omg.sysml.lang.sysml.Type;
 import org.omg.sysml.util.ElementUtil;
 import org.omg.sysml.util.ExpressionUtil;
@@ -89,6 +90,8 @@ public class ModelLevelExpressionEvaluator {
 	
 	public EList<Element> evaluateFeatureReference(FeatureReferenceExpression expression, Element target) {
 		Feature referent = expression.getReferent();
+		// expression.setReferent(referent);
+		// It should change nothing but throws an error, setReferent() appears not to be implemented
 		return referent == null? null:
 			   evaluateFeature(referent, target instanceof Type? (Type)target: null);
 	}
@@ -206,9 +209,23 @@ public class ModelLevelExpressionEvaluator {
 
 	public EList<Element> expressionValue(InvocationExpression invocation, int i, Element target) {
 		Element value = argumentValue(invocation, i, target);
-		return value instanceof Expression? evaluate((Expression)value, target): null;
+		EList<Element> result = null;
+		// ajout avec jerem, pas sûr de usage, avant on avait juste : 
+		// return value instanceof Expression? evaluate((Expression)value, target) : null;
+		if (value instanceof ReferenceUsage referenceUsage) {
+			result = evaluate(referenceUsage);
+		} else {
+			result = evaluate((Expression)value, target);
+		}
+		return value != null ? result: null;
 	}
 
+	public EList<Element> evaluate(ReferenceUsage invocation){
+		EList<Element> element = new BasicEList<>(); 
+		element.add(invocation);
+		return element;
+	}
+	
 	public Boolean booleanExpressionValue(InvocationExpression invocation, int i, Element target) {
 		EList<Element> values = expressionValue(invocation, i, target);
 		if (values == null || values.size() != 1) {

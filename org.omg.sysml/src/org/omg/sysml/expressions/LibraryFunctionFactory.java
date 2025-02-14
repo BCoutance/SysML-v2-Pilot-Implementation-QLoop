@@ -73,6 +73,8 @@ public class LibraryFunctionFactory {
 		put(new XorFunction());
 		put(new AndFunction());
 		
+		put(new CollectFunction());
+		
 		put(new LessThanFunction());
 		put(new LessThanOrEqualFunction());
 		put(new GreaterThanFunction());
@@ -87,6 +89,8 @@ public class LibraryFunctionFactory {
 		
 		put(new StringLengthFunction());
 		put(new StringSubstringFunction());
+		
+		put(new PythonFunction());
 	}
 
 	protected void put(LibraryFunction functionImpl) {
