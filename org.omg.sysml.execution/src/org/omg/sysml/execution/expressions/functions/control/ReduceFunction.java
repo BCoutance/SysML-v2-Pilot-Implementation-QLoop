@@ -27,6 +27,7 @@ import org.omg.sysml.expressions.ExpressionEvaluator;
 import org.omg.sysml.expressions.functions.control.ControlFunction;
 import org.omg.sysml.lang.sysml.Element;
 import org.omg.sysml.lang.sysml.Expression;
+import org.omg.sysml.lang.sysml.FeatureReferenceExpression;
 import org.omg.sysml.lang.sysml.InvocationExpression;
 import org.omg.sysml.util.EvaluationUtil;
 
@@ -57,7 +58,8 @@ public class ReduceFunction extends ControlFunction {
 	public EList<Element> invoke(InvocationExpression invocation, Element target,
 			ExpressionEvaluator evaluator) {
 		EList<Element> list = evaluator.evaluateArgument(invocation, 0, target);
-		Element expr = evaluator.argumentValue(invocation, 1, target);
+		//Element expr = evaluator.argumentValue(invocation, 1, target);
+		Element expr = ((FeatureReferenceExpression)invocation.getArgument().get(1)).getReferent();
 		if (list == null || !(expr instanceof Expression)) {
 			return EvaluationUtil.singletonList(invocation);
 		} else if (list.isEmpty()) {

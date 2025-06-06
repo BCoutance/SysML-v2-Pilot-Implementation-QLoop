@@ -93,11 +93,24 @@ public class ExpressionUtil {
 	}
 
 	public static Element getReferentFor(FeatureReferenceExpression expression) {
-		return expression.getOwnedMembership().stream().
-				filter(mem->!(mem instanceof ParameterMembership)).
-				map(Membership::getMemberElement).
-				filter(el->el != null).
-				findFirst().orElse(null);
+		EList<Membership> ownedMembership = expression.getOwnedMembership();
+		for (Membership membership : ownedMembership) {
+			if (!(ownedMembership instanceof ParameterMembership)) {
+				Element memberElement = membership.getMemberElement();
+				
+				if (memberElement != null) {
+					return memberElement;
+				}
+				
+			}
+		}
+		return null;
+		
+//		return expression.getOwnedMembership().stream().
+//				filter(mem->!(mem instanceof ParameterMembership)).
+//				map(Membership::getMemberElement).
+//				filter(el->el != null).
+//				findFirst().orElse(null);
 	}
 	
 	public static Element getTargetFeatureFor(Expression expression) {

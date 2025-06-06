@@ -71,6 +71,12 @@ public class ModelLevelLibraryFunctionFactory {
 		put(new LessThanOrEqualFunction());
 		put(new GreaterThanFunction());
 		put(new GreaterThanOrEqualFunction());
+		put(new SqrtFunction());//added
+		put(new LogFunction()); //added
+		put(new ExpFeature());	//added
+
+		// put(new MaxFunctionPerso()); // In execution
+		// put(new MinFunctionPerso()); // In execution
 		
 		// BooleanFunctions
 		put(new NotFunction());
@@ -87,6 +93,10 @@ public class ModelLevelLibraryFunctionFactory {
 		put(new NullCoalescingFunction());		
 		put(new CollectFunction());
 		put(new SelectFunction());
+		//put(new ReduceFunctionPerso()); // In execution
+		//put(new CollectFunctionPerso()); 
+		//put(new SelectFunctionPerso()); 
+	
 		
 		//TrigFunctions
 		put(new PiFeature());

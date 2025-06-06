@@ -5,11 +5,15 @@ import org.eclipse.xtext.parser.*;
 import org.eclipse.xtext.parser.impl.*;
 import org.eclipse.emf.ecore.util.EcoreUtil;
 import org.eclipse.emf.ecore.EObject;
+import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.common.util.Enumerator;
 import org.eclipse.xtext.parser.antlr.AbstractInternalAntlrParser;
 import org.eclipse.xtext.parser.antlr.XtextTokenStream;
 import org.eclipse.xtext.parser.antlr.XtextTokenStream.HiddenTokens;
 import org.eclipse.xtext.parser.antlr.AntlrDatatypeRuleToken;
+import org.omg.sysml.lang.sysml.ConnectorAsUsage;
+import org.omg.sysml.lang.sysml.Element;
+import org.omg.sysml.lang.sysml.Feature;
 import org.omg.sysml.xtext.services.SysMLGrammarAccess;
 
 import org.antlr.runtime.*;
@@ -10113,7 +10117,6 @@ public class InternalSysMLParser extends InternalSysMLParser16 {
                     }
                     pushFollow(FOLLOW_55);
                     this_Identification_0=ruleIdentification(current);
-
                     state._fsp--;
                     if (state.failed) return current;
                     if ( state.backtracking==0 ) {
@@ -10207,6 +10210,13 @@ public class InternalSysMLParser extends InternalSysMLParser16 {
                 appendSkippedTokens();
             }
         finally {
+        }
+        if (current instanceof ConnectorAsUsage) {
+        	EList<Feature> targetFeature0 = ((ConnectorAsUsage) current).getTargetFeature();
+            EList<Element> source0 = ((ConnectorAsUsage) current).getSource();
+            Feature sourceFeature0 = ((ConnectorAsUsage) current).getSourceFeature();
+            EList<Element> target0 = ((ConnectorAsUsage) current).getTarget();
+            int ibvterzcda = 12;
         }
         return current;
     }

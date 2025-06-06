@@ -29,7 +29,12 @@
  *****************************************************************************/
 package org.omg.sysml.interactive;
 
+import java.io.File;
 import java.io.IOException;
+import java.io.InputStream;
+import java.nio.file.Path;
+import java.nio.file.Files;
+import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
@@ -44,6 +49,9 @@ import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EObject;
 import org.eclipse.emf.ecore.EPackage;
 import org.eclipse.emf.ecore.resource.Resource;
+import org.eclipse.emf.common.util.URI;
+import org.eclipse.emf.ecore.resource.URIConverter;
+import org.eclipse.xtext.EcoreUtil2;
 import org.eclipse.xtext.nodemodel.ICompositeNode;
 import org.eclipse.xtext.nodemodel.util.NodeModelUtils;
 import org.eclipse.xtext.parser.IParseResult;
@@ -60,10 +68,16 @@ import org.omg.kerml.xtext.xmi.KerMLxStandaloneSetup;
 import org.omg.kerml.xtext.library.ILibraryIndexProvider;
 import org.omg.kerml.xtext.naming.KerMLQualifiedNameConverter;
 import org.omg.sysml.execution.expressions.ExpressionEvaluator;
+import org.omg.sysml.util.EvaluationUtil;
 import org.omg.sysml.lang.sysml.Element;
 import org.omg.sysml.lang.sysml.Expression;
+import org.omg.sysml.lang.sysml.Feature;
+import org.omg.sysml.lang.sysml.FeatureReferenceExpression;
+import org.omg.sysml.lang.sysml.InvocationExpression;
+import org.omg.sysml.lang.sysml.ItemUsage;
 import org.omg.sysml.lang.sysml.Membership;
 import org.omg.sysml.lang.sysml.Namespace;
+import org.omg.sysml.lang.sysml.Package;
 import org.omg.sysml.lang.sysml.RenderingUsage;
 import org.omg.sysml.lang.sysml.ResultExpressionMembership;
 import org.omg.sysml.lang.sysml.SysMLFactory;
@@ -73,6 +87,7 @@ import org.omg.sysml.lang.sysml.ViewUsage;
 import org.omg.sysml.lang.sysml.util.SysMLLibraryUtil;
 import org.omg.sysml.plantuml.SysML2PlantUMLLinkProvider;
 import org.omg.sysml.plantuml.SysML2PlantUMLSvc;
+import org.omg.sysml.util.FeatureUtil;
 import org.omg.sysml.util.SysMLUtil;
 import org.omg.sysml.util.TypeUtil;
 import org.omg.sysml.util.repository.EObjectUUIDTracker;
@@ -111,6 +126,8 @@ public class SysMLInteractive extends SysMLUtil {
 	public static final String KERMLX_EXTENSION = ".kermlx";
 	public static final String SYSMLX_EXTENSION = ".sysmlx";
 	
+	private SysMLLocus sysMLLocus;
+	
 	protected static Injector injector;
 	protected static SysMLInteractive instance = null;
 		
@@ -142,8 +159,7 @@ public class SysMLInteractive extends SysMLUtil {
 	@Inject
 	private SysMLInteractive() {
 		super(new StrictShadowingResourceDescriptionData());
-	}
-	
+	}	
 	public void loadLibrary(String path) {
 		if (path != null) {
 			if (!path.endsWith("/")) {
@@ -214,7 +230,6 @@ public class SysMLInteractive extends SysMLUtil {
 		return resource == null? Collections.emptyList():
 			validator.validate(resource, CheckMode.ALL, CancelIndicator.NullImpl);
 	}
-	
 	private Resource getDummyResource() {
 		if (this.dummyResource == null) {
 			this.dummyResource = this.createResource("dummy" + SYSML_EXTENSION);
@@ -246,6 +261,7 @@ public class SysMLInteractive extends SysMLUtil {
 		this.next(SYSML_EXTENSION);
 		try {
 			this.parse(input);
+        	//saveInXMIresource("process");
 			List<Issue> issues = this.validate();
 			Element rootElement = this.getRootElement();
 			SysMLInteractiveResult result = new SysMLInteractiveResult(rootElement, issues);
@@ -324,6 +340,7 @@ public class SysMLInteractive extends SysMLUtil {
 		} else {
 			Type calc = (Type)((Namespace)result.getRootElement()).getOwnedMember().get(0);
 			Expression expr = (Expression)TypeUtil.getFeatureByMembershipIn(calc, ResultExpressionMembership.class);
+			// EvaluationUtil.initCaches();
 			List<Element> elements = ExpressionEvaluator.INSTANCE.evaluate(expr, target);
 			this.removeResource();
 			return elements == null? "": 
@@ -335,6 +352,63 @@ public class SysMLInteractive extends SysMLUtil {
 		return "-h".equals(input)? 
 				eval(null, null, Collections.singletonList("true")):
 				eval(input, targetName, Collections.emptyList());
+	}
+	
+	private String flowExec(String itemName, String targetName, String outputName) {
+		this.counter++;		
+		Package key = null;
+		for (Package pckg : sysMLLocus.getFlowMaps().keySet()) {
+			if (pckg.getDeclaredName().equals(targetName)) {
+				key = pckg;
+				break;
+			}
+		} 
+		if (key == null) return "ERROR: target must be a package / could not be resolved \n";
+		Feature item = null;
+		for (Feature i : sysMLLocus.getFlowMaps().get(key).keySet()) {
+			if (i.getDeclaredName().equals(itemName)) {
+				item = i;
+				break;
+			}
+		}
+		if (item == null) return "ERROR: item could not be resolved \n";
+		
+		ContextChain output = sysMLLocus.getContextByName(key, outputName);
+		if (output == null) return "ERROR: output could not be resolved. Provide name as \"partA.subpartA1.portX\" \n";
+		ContextChain itemCtxt = output.findFeatureCtxt(item);
+		if (itemCtxt == null) return "ERROR: "+outputName+" has no flow of "+itemName+" \n";
+		
+		SysMLFlowExecutor sysMLFlowExecutor = new SysMLFlowExecutor();
+		Feature itemOut = sysMLFlowExecutor.execute(sysMLLocus, item, key, itemCtxt, this.getInputResources());
+		if (itemOut == null) return "No item exiting from flow\n";
+		
+		String result = itemName + " at port \"" + outputName + "\" in \"" + targetName + "\"\n";
+		result = printFeature(itemOut, result, 0, false);
+   		return result;
+	}
+	private String printFeature(Feature f, String result, int ind, boolean inCollection) {
+		if (f instanceof Expression) {
+			if (f instanceof InvocationExpression invocValExpr) {
+				if (invocValExpr.instantiatedType().getQualifiedName().equals("BaseFunctions::\',\'")) {
+					if (!inCollection) {
+						result += "\n";
+						ind+=1;
+					}
+					result = printFeature(invocValExpr.getArgument().get(0), result, ind, true);				
+					result = printFeature(invocValExpr.getArgument().get(1), result, ind, false);
+				}
+			} else if (f instanceof FeatureReferenceExpression featrefValExpr) {
+				result = printFeature(featrefValExpr.getReferent(), result, ind, false);
+			} else result += " = " + SysMLInteractiveUtil.formatElement(f);
+		} else {
+			result += "  ".repeat(ind) +" - "+ (f.getName() == null ? "unnamed" : f.getName());
+			Expression valueExpressionFor = FeatureUtil.getValueExpressionFor(f);
+			if (valueExpressionFor!= null) {
+				result = printFeature(valueExpressionFor, result, ind, false);
+			} else result += ": \n";	
+			for (Feature sf : f.getOwnedFeature()) result = printFeature(sf, result, ind+1, false);
+		}
+		return result;
 	}
 	
 	public String listLibrary() {
@@ -755,6 +829,99 @@ public class SysMLInteractive extends SysMLUtil {
 		}
 	}
 	
+
+	public void readDirectory (File directory){
+		for (File sibling: directory.listFiles()) {
+			if (sibling.isDirectory()) {
+				readDirectory(sibling);
+			} else {
+		    	URI uri = URI.createFileURI(sibling.getPath());
+		    	URIConverter theURIConverter = this.getResourceSet().getURIConverter();
+		    	URI normalizedURI = theURIConverter.normalize(uri);
+		    	for (Resource resource : this.getResourceSet().getResources())
+		    	{
+		    		if (theURIConverter.normalize(resource.getURI()).equals(normalizedURI)) 
+		    		{
+		    			this.getResourceSet().getResources().remove(resource);
+		    			break; //without it, the getResources() from the for loop sends ConcurrentModificationException 
+		    		}
+		    	}
+		    	if (sibling.getPath().endsWith(".kerml")) {
+		    		this.readAll(sibling.getPath(), false, KERML_EXTENSION);
+		    	}
+		    	else if (sibling.getPath().endsWith(".sysml"))  {
+		    		this.readAll(sibling.getPath(), true, SYSML_EXTENSION);
+		    	}		        
+		    	// All the resources read from the first path are considered to be input resources. 
+			    // All the resources read from the other paths are considered to be library resources. 
+			    // Hence the "true" argument in readAll
+		    	// TODO clarify that
+				}
+	    }			
+	}
+	
+	public SysMLInteractiveResult loadfile(String input) throws IOException {
+		
+		// cleaning the resource from all previous loads
+		// - in the InputResources HashSet
+		this.getInputResources().clear();
+		// - in the ResourceSet
+		EList<Resource> digitResources = new BasicEList<>();
+		for (Resource resource : this.getResourceSet().getResources())
+    	{
+    		if (resource.getURI().toString().matches("[1-9]\\d*\\.sysml")) {
+    			digitResources.add(resource);
+    		}
+    	}
+		this.getResourceSet().getResources().removeAll(digitResources);
+
+		
+		SysMLInteractiveResult result = null;
+		this.next(SYSML_EXTENSION);
+		
+		File directory = (new File(input)).getParentFile();
+	    readDirectory(directory);
+	    for (Resource r : this.getInputResources()) validator.validate(r, CheckMode.ALL, CancelIndicator.NullImpl);
+	   
+	    final InputStream inStream = Files.newInputStream(Path.of(input), StandardOpenOption.READ);
+		Resource resource = this.getResource();
+		if (resource != null) {
+			resource.load(inStream, Collections.emptyMap());
+			List<Issue> issues = this.validate();
+			Element rootElement = this.getRootElement();
+			result = new SysMLInteractiveResult(rootElement, issues); // TODO why now it puts rootElement content in the result ?
+			if (result.hasErrors()) {
+	            //System.out.println("ERROR: parsing failed : ");
+	            //for (Issue issue : issues) System.out.println(issue);
+	            this.removeResource();
+	        } else {
+	        	// saveInXMIresource("load");
+	        	this.addResourceToIndex(resource);
+	        }			
+		}
+		EvaluationUtil.initCaches();
+
+		sysMLLocus = new SysMLLocus(resource, this.getInputResources());
+		
+		return result;
+	}
+		
+	private void saveInXMIresource(String complement) {
+		Resource res = this.getResource();
+		Resource xmiResource = this.getResourceSet().createResource(URI.createFileURI("C:\\git\\system-modeling\\com.cea.qloop.systemmodeling.java\\com.cea.qloop.systemmodeling.interpreter\\outputInteractive"+complement+".xmi"));
+		Resource jsonResource = this.getResourceSet().createResource(URI.createFileURI("C:\\git\\system-modeling\\com.cea.qloop.systemmodeling.java\\com.cea.qloop.systemmodeling.interpreter\\outputInteractive"+complement+".json"));
+		
+		EObject rootcopy = EcoreUtil2.copy(res.getContents().get(0));
+		xmiResource.getContents().add(rootcopy);
+		try {
+			xmiResource.save(Collections.EMPTY_MAP);
+			this.getResourceSet().getResources().remove(xmiResource);
+		} catch (IOException e) {
+			// TODO Auto-generated catch block
+			e.printStackTrace();
+		}
+	}
+
 	public void run() {
         try (Scanner in = new Scanner(System.in)) {
 	        do {
@@ -799,7 +966,7 @@ public class SysMLInteractive extends SysMLUtil {
 								}
 							} else if ("%load".equals(command)) {
 								if (!"".equals(argument)) {
-									System.out.print(this.load(argument));
+									System.out.print(this.loadfile(argument));
 								}
 							} else if ("%viz".equals(command)) {
 								if (!"".equals(argument)) {
@@ -820,6 +987,22 @@ public class SysMLInteractive extends SysMLUtil {
 									}
 									System.out.print(eval(argument, name));
 								}
+							} else if ("%flowExec".equals(command)) {
+								if (!"".equals(argument)) {
+									if (argument.startsWith("--target ") || argument.startsWith("--target=")) {
+										argument = argument.substring(9);
+					        			i = argument.indexOf(' ');
+					        			String targetName = i == -1? argument: argument.substring(0, i);
+					        			argument = i == -1? null: argument.substring(i + 1).trim();
+					        			if (argument.startsWith("--output ") || argument.startsWith("--output=")) {
+											argument = argument.substring(9);
+						        			i = argument.indexOf(' ');
+						        			String outputName = i == -1? argument: argument.substring(0, i);
+						        			argument = i == -1? null: argument.substring(i + 1).trim();
+											System.out.print(flowExec(argument, targetName, outputName));
+						        		} else System.out.println("ERROR: Please provide output port");
+									} else System.out.println("ERROR: Please provide package target");
+								}								
 							} else {
 								System.out.println("ERROR:Invalid command '" + input + "'");
 							}

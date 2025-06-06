@@ -21,9 +21,13 @@
 
 package org.omg.sysml.delegate.setting;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.InternalEObject;
+import org.eclipse.emf.ecore.util.EcoreEList;
 import org.eclipse.uml2.common.util.DerivedEObjectEList;
 import org.omg.sysml.lang.sysml.Membership;
 import org.omg.sysml.lang.sysml.SysMLPackage;
@@ -36,8 +40,29 @@ public class Namespace_ownedMembership_SettingDelegate extends BasicDerivedListS
 
 	@Override
 	protected EList<Membership> basicGet(InternalEObject owner) {
-		return new DerivedEObjectEList<Membership>(Membership.class, owner, 
-				SysMLPackage.NAMESPACE__OWNED_MEMBERSHIP, new int[] {SysMLPackage.NAMESPACE__OWNED_RELATIONSHIP});
+		Object object = owner.eGet(SysMLPackage.NAMESPACE__OWNED_RELATIONSHIP,true,true);
+		
+		List<Object> values = new ArrayList<>();
+		
+		if(object instanceof EList<?>)
+		{
+			EList<?> list = (EList<?>) object;
+			for (Object e : list) {
+				if(Membership.class.isInstance(e)) {
+					
+					values.add(e);
+				}
+			}
+			
+			EList<Membership> result = new EcoreEList.UnmodifiableEList(owner, eStructuralFeature, values.size(), values.toArray());
+			
+			return result;
+		}
+		
+		return null;
+		
+//		return new DerivedEObjectEList<Membership>(Membership.class, owner, 
+//				SysMLPackage.NAMESPACE__OWNED_MEMBERSHIP, new int[] {SysMLPackage.NAMESPACE__OWNED_RELATIONSHIP});
 	}
 
 }

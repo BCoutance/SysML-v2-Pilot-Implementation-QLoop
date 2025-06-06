@@ -34,7 +34,7 @@ public class NonNotifyingEObjectEList<T> extends EObjectEList<T> {
 	protected boolean isUnique;
 	
 	public NonNotifyingEObjectEList(Class<?> dataClass, InternalEObject owner, int featureID) {
-		this(dataClass, owner, featureID, true);
+		this(dataClass, owner, featureID, false);
 	}
 
 	public NonNotifyingEObjectEList(Class<?> dataClass, InternalEObject owner, int featureID, boolean isUnique) {

@@ -25,6 +25,7 @@ package org.omg.sysml.delegate.setting;
 import org.eclipse.emf.common.util.EList;
 import org.eclipse.emf.ecore.EStructuralFeature;
 import org.eclipse.emf.ecore.InternalEObject;
+import org.omg.sysml.lang.sysml.Relationship;
 import org.omg.sysml.lang.sysml.Specialization;
 import org.omg.sysml.lang.sysml.Type;
 import org.omg.sysml.util.NonNotifyingEObjectEList;
@@ -38,11 +39,24 @@ public class Type_ownedSpecialization_SettingDelegate extends BasicDerivedListSe
 	@Override
 	protected EList<?> basicGet(InternalEObject owner) {
 		EList<Specialization> generalizations = new NonNotifyingEObjectEList<>(Specialization.class, owner, eStructuralFeature.getFeatureID());
-		((Type)owner).getOwnedRelationship().stream().
-			filter(Specialization.class::isInstance).
-			map(Specialization.class::cast).
-			filter(gen->gen.getSpecific() == owner).
-			forEachOrdered(generalizations::add);
+		
+		
+		for (Relationship ownedRelationship : ((Type)owner).getOwnedRelationship()) {
+			if (ownedRelationship instanceof Specialization) {
+				Specialization specialization = (Specialization) ownedRelationship;
+				
+				if(specialization.getSpecific() == owner) {
+					generalizations.add(specialization);
+				}
+				
+			}
+		}
+		
+//		((Type)owner).getOwnedRelationship().stream().
+//			filter(Specialization.class::isInstance).
+//			map(Specialization.class::cast).
+//			filter(gen->gen.getSpecific() == owner).
+//			forEachOrdered(generalizations::add);
 		return generalizations;
 	}
 

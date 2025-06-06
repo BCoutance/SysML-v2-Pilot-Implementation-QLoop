@@ -37,6 +37,20 @@ public class ListConcatFunction extends BaseFunction {
 
 	@Override
 	public EList<Element> invoke(InvocationExpression invocation, Element target, ExpressionEvaluator evaluator) {
+		//if (invocation.getArgument().get(0) instanceof FeatureReferenceExpression featrefexpr) {
+		//	Feature referent = featrefexpr.getReferent();
+		//	Type type = referent.getType().isEmpty()?null : referent.getType().get(0);
+		//	if (type.getOwner().getName().equals("Collections")) {
+				// Is there a way to evaluate a in 
+				// 			b : Collection = (2,3);
+				//			a : Collection =  = (1,b);
+				// not as (1,2,3) but (1,(2,3) ?
+				// The problem is the output of this invoke must be EList<Element>, and Element cannot be an iterable
+				// Changing the output type would have big consequences, since this collection can be used in another expression
+				// Another issue is that (1,2,3,4) is parsed as (1,(2,(3,4))) so there are undetectable structures
+				// (0,1,(2,3)) and (0,1,2,3) are identical in the emf resource 
+		//	}
+		//}		
 		EList<Element> list = evaluator.evaluateArgument(invocation, 0, target);
 		if (list != null) {
 			EList<Element> result = new BasicEList<>(list);

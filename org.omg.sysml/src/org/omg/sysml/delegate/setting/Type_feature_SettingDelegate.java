@@ -39,10 +39,20 @@ public class Type_feature_SettingDelegate extends BasicDerivedListSettingDelegat
 	@Override
 	protected EList<?> basicGet(InternalEObject owner) {
 		EList<Feature> features = new NonNotifyingEObjectEList<>(Feature.class, owner, eStructuralFeature.getFeatureID());
-		((Type) owner).getFeatureMembership().stream().
-			map(FeatureMembership::getOwnedMemberFeature).
-			filter(f->f != null).
-			forEachOrdered(features::add);
+		
+		for (FeatureMembership featureMembership : ((Type) owner).getFeatureMembership()) {
+			Feature ownedMemberFeature = featureMembership.getOwnedMemberFeature();
+			
+			if (ownedMemberFeature!=null) {
+				features.add(ownedMemberFeature);
+				
+			}
+		}
+		
+//		((Type) owner).getFeatureMembership().stream().
+//			map(FeatureMembership::getOwnedMemberFeature).
+//			filter(f->f != null).
+//			forEachOrdered(features::add);
 		return features;
 	}
 

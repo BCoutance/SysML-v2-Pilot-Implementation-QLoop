@@ -23,7 +23,10 @@ package org.omg.sysml.util;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 
 import org.eclipse.emf.common.util.BasicEList;
 import org.eclipse.emf.common.util.EList;
@@ -34,6 +37,7 @@ import org.omg.sysml.lang.sysml.Element;
 import org.omg.sysml.lang.sysml.Expression;
 import org.omg.sysml.lang.sysml.Feature;
 import org.omg.sysml.lang.sysml.FeatureDirectionKind;
+import org.omg.sysml.lang.sysml.FeatureMembership;
 import org.omg.sysml.lang.sysml.FeatureReferenceExpression;
 import org.omg.sysml.lang.sysml.FeatureTyping;
 import org.omg.sysml.lang.sysml.FeatureValue;
@@ -44,6 +48,7 @@ import org.omg.sysml.lang.sysml.LiteralInfinity;
 import org.omg.sysml.lang.sysml.LiteralInteger;
 import org.omg.sysml.lang.sysml.LiteralRational;
 import org.omg.sysml.lang.sysml.LiteralString;
+import org.omg.sysml.lang.sysml.Membership;
 import org.omg.sysml.lang.sysml.MetadataFeature;
 import org.omg.sysml.lang.sysml.Redefinition;
 import org.omg.sysml.lang.sysml.Specialization;
@@ -261,12 +266,90 @@ public class EvaluationUtil {
 		}
 	}
 	
-	public static Feature getTypeFeatureFor(Feature feature, Type type) {
+	// old version, kept for comparison purposes	
+	public static Feature getTypeFeatureForOld(Feature feature, Type type) {
 		return type == null? null :
 			type.getFeature().stream().
 				filter(f->FeatureUtil.getAllRedefinedFeaturesOf(f).contains(feature)).
 				findFirst().orElse(null);
 	}
+	
+	public static Map<Type,EList<Feature>> typeFeatureCache = new HashMap<Type,EList<Feature>>();
+	
+	public static void initCaches() {
+		 typeFeatureCache.clear();
+	}
+	
+	public static EList<Feature> getFeature(Type type) {
+		return typeFeatureCache.computeIfAbsent(type, k -> type.getFeature());
+	}
+	public static Feature getTypeFeatureFor(Feature feature, Type type) {
+		if (type == null) return null;
+
+		EList<Feature> features = getFeature(type);
+
+		for (Feature f : features) {
+			Set<Feature> allRedefinedFeaturesOf = FeatureUtil.getAllRedefinedFeaturesOf(f);
+			if (allRedefinedFeaturesOf.contains(feature)) {
+				if (f.getOwner() == type) {
+					return f;
+				}
+				else {
+					Feature referenceUsage = createRedef(type, f);
+					features.remove(f); // added
+					features.addFirst(referenceUsage); // added
+					return referenceUsage;
+				}
+			}		
+		}
+		return null;
+	}
+
+	public static Feature createRedef(Type type, Feature f) {
+		Feature newf = (Feature) SysMLFactory.eINSTANCE.create(f.eClass());
+		
+		String fname = f.getDeclaredName();
+		String tname = type.getDeclaredName();
+		if (fname!=null) {
+			if (tname != null) newf.setDeclaredName(tname+"_"+fname);
+			else newf.setDeclaredName(fname+"_ref");
+		}
+		newf.getInheritedMembership().addAll(f.getFeatureMembership());
+		
+		Expression fValueExpression = FeatureUtil.getValueExpressionFor(f);
+		if (fValueExpression != null) {
+			FeatureValue featureValue = SysMLFactory.eINSTANCE.createFeatureValue();
+			FeatureReferenceExpression featRefExpr = SysMLFactory.eINSTANCE.createFeatureReferenceExpression();
+
+			Membership referentmembership = SysMLFactory.eINSTANCE.createMembership();
+			referentmembership.setMemberElement(fValueExpression);
+			featRefExpr.getOwnedRelationship().add(referentmembership);
+
+			featureValue.getOwnedRelatedElement().add(featRefExpr);
+			newf.getOwnedRelationship().add(featureValue);
+		}
+
+		Redefinition redefinition = SysMLFactory.eINSTANCE.createRedefinition();
+		redefinition.setRedefinedFeature(f);
+		newf.getOwnedRelationship().add(redefinition);
+
+		FeatureMembership membership = SysMLFactory.eINSTANCE.createFeatureMembership();
+		membership.setOwnedMemberFeature(newf);
+		membership.setOwningType(type);
+		
+		type.getOwnedRelationship().add(membership);
+		typeFeatureCache.put(newf, getFeature(f));
+		
+		//FeatureUtil.getAllRedefinedFeaturesOf(newf).addAll(FeatureUtil.getAllRedefinedFeaturesOf(f)); //added
+		// immutable : newf.getOwnedSubsetting().add(redefinition); //added
+		// immutable : FeatureUtil.getSubsettedFeaturesOf(newf).add(f);
+		newf.setIsAbstract(f.isAbstract());
+		newf.setIsEnd(f.isEnd());
+		//NamespaceUtil.addMemberTo(type, f);
+
+		return newf;
+	} 
+	
 	
 	public static Expression getResultExpressionFor(Type type) {
 		Expression resultExpression = null;
@@ -281,6 +364,21 @@ public class EvaluationUtil {
 		}
 		return resultExpression;
 	}
+	
+//	private void valueFeature(Feature f, Element target) {
+//		Expression valueExpressionFor = FeatureUtil.getValueExpressionFor(f);
+//		if (valueExpressionFor!= null) {
+//			EList<Element> r = ExpressionEvaluator.INSTANCE.evaluate(valueExpressionFor, target);
+//			for (Element element : r) {
+//				if(element instanceof Feature eltfeat) valueFeature(eltfeat, target);
+//			}
+//			f.getOwnedRelationship().remove(FeatureUtil.getValuationFor(f));
+//			FeatureValue newFeatureValue = SysMLFactory.eINSTANCE.createFeatureValue();
+//			newFeatureValue.setValue(EvaluationUtil.expressionFor(r, target));
+//			f.getOwnedRelationship().add(newFeatureValue);
+//		}
+//		for (Feature sf : f.getOwnedFeature()) valueFeature(sf, target);
+//	}
 
 	public static boolean isMetaclassFeature(Element element) {
 		return getMetaclassReferenceOf(element) != null;
@@ -333,12 +431,12 @@ public class EvaluationUtil {
 				TypeUtil.addOwnedFeatureTo(target, actual);
 				
 				Expression valueExpr;
-				if (argument instanceof Expression) {
-					valueExpr = (Expression)argument;
-				} else {
-					valueExpr = SysMLFactory.eINSTANCE.createFeatureReferenceExpression();
-					NamespaceUtil.addMemberTo(valueExpr, argument);
-				}
+				//if (argument instanceof Expression) {
+				//	valueExpr = (Expression)argument;
+				//} else {
+				valueExpr = SysMLFactory.eINSTANCE.createFeatureReferenceExpression();
+				NamespaceUtil.addMemberTo(valueExpr, argument);
+				//}
 				
 				FeatureValue featureValue = SysMLFactory.eINSTANCE.createFeatureValue();
 				featureValue.setValue(valueExpr);
@@ -361,8 +459,28 @@ public class EvaluationUtil {
 		specialization.setSpecific(invocation);
 		invocation.getOwnedRelationship().add(specialization);
 
-		List<Feature> parameters = TypeUtil.getAllParametersOf(type);
-		instantiateArguments(invocation, parameters, arguments);		
+		List<Feature> parameters = new BasicEList<>();
+		for (Feature feature : TypeUtil.getAllParametersOf(type)) {
+			if (feature.getDirection().equals(FeatureDirectionKind.IN)) parameters.add(feature);
+		}
+		
+		//EList<Feature> parameters = type.getInput();
+		instantiateArguments(invocation, parameters, arguments);
+		
+//		Expression resultExpression = EvaluationUtil.getResultExpressionFor(invocation);
+//		if (resultExpression != null) {
+//			FeatureReferenceExpression featRefExpr = SysMLFactory.eINSTANCE.createFeatureReferenceExpression();
+//			NamespaceUtil.addMemberTo(invocation, featRefExpr);
+//			
+//			Membership referentmembership = SysMLFactory.eINSTANCE.createMembership();
+//			referentmembership.setMemberElement(resultExpression);
+//			featRefExpr.getOwnedRelationship().add(referentmembership);
+//			
+//			ResultExpressionMembership resultMembership = SysMLFactory.eINSTANCE.createResultExpressionMembership();
+//			resultMembership.setMemberElement(featRefExpr);
+//			invocation.getOwnedRelationship().addFirst(resultMembership);	
+//		}
+		
 		return invocation;
 	}
 

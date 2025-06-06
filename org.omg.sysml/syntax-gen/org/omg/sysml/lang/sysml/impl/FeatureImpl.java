@@ -24,6 +24,7 @@ package org.omg.sysml.lang.sysml.impl;
 import java.lang.reflect.InvocationTargetException;
 
 import java.util.Collection;
+import java.util.List;
 
 import org.eclipse.emf.common.notify.Notification;
 import org.eclipse.emf.common.notify.NotificationChain;
@@ -620,7 +621,12 @@ public class FeatureImpl extends TypeImpl implements Feature {
 	@SuppressWarnings("unchecked")
 	@Override
 	public EList<Redefinition> getOwnedRedefinition() {
-		return (EList<Redefinition>)OWNED_REDEFINITION__ESETTING_DELEGATE.dynamicGet(this, null, 0, true, false);
+		EList<Redefinition> list = new BasicEList<>();
+		list.addAll((EList<Redefinition>)OWNED_REDEFINITION__ESETTING_DELEGATE.dynamicGet(this, null, 0, true, false));
+		for (Relationship relationship : this.getOwnedRelationship()) {
+			if (relationship instanceof Redefinition redef && !list.contains(redef)) list.add(redef);
+		}
+		return list;
 	}
 
 	/**

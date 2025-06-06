@@ -40,11 +40,21 @@ public class OwningMembership_ownedMemberElement_SettingDelegate extends BasicDe
 	}
 	
 	protected <T> T basicGet(InternalEObject owner, Class<T> kind) {
-		return ((OwningMembership)owner).getOwnedRelatedElement().stream().
-				findFirst().
-				filter(kind::isInstance).
-				map(kind::cast).
-				orElse(null);
+		EList<Element> ownedRelatedElement = ((OwningMembership)owner).getOwnedRelatedElement();
+		
+		for (Element ownedElement : ownedRelatedElement) {
+			if(kind.isInstance(ownedElement)) {
+				return (T) ownedElement;
+			}
+		}
+		
+		return null;
+		
+//		return ((OwningMembership)owner).getOwnedRelatedElement().stream().
+//				findFirst().
+//				filter(kind::isInstance).
+//				map(kind::cast).
+//				orElse(null);
 	}
 	
 	@Override

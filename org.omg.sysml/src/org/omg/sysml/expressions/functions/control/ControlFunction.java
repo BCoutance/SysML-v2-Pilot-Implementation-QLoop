@@ -29,6 +29,7 @@ import org.omg.sysml.expressions.ExpressionEvaluator;
 import org.omg.sysml.expressions.functions.LibraryFunction;
 import org.omg.sysml.lang.sysml.Element;
 import org.omg.sysml.lang.sysml.Expression;
+import org.omg.sysml.lang.sysml.FeatureReferenceExpression;
 import org.omg.sysml.lang.sysml.InvocationExpression;
 import org.omg.sysml.util.EvaluationUtil;
 
@@ -43,7 +44,8 @@ public abstract class ControlFunction implements LibraryFunction {
 			ExpressionEvaluator evaluator,
 			BiFunction<Element, EList<Element>, EList<Element>> select) {
 		EList<Element> list = evaluator.evaluateArgument(invocation, 0, target);
-		Element expr = evaluator.argumentValue(invocation, 1, target);
+		//Element expr = evaluator.argumentValue(invocation, 1, target);
+		Element expr = ((FeatureReferenceExpression)invocation.getArgument().get(1)).getReferent();
 		if (list == null || !(expr instanceof Expression)) {
 			return EvaluationUtil.singletonList(invocation);
 		} else {

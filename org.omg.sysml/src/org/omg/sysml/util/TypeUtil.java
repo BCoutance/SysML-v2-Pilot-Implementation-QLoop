@@ -147,6 +147,11 @@ public class TypeUtil {
 	public static List<Type> getGeneralTypesOf(Type type, boolean excludeImplied, Element skip) {
 		List<Type> generalTypes = getSupertypesOf(type, excludeImplied);
 		if (type instanceof Feature) {
+			// addition because constructed features do not resolve their general Type			
+			for (Feature redefinedFeature : FeatureUtil.getRedefinedFeaturesOf((Feature)type)) {
+				if (!generalTypes.contains(redefinedFeature)) generalTypes.add(redefinedFeature);
+			}
+			// end of addition
 			EList<FeatureChaining> featureChainings = ((Feature)type).getOwnedFeatureChaining();
 			if (!featureChainings.isEmpty() && !featureChainings.contains(skip)) {
 				FeatureChaining lastFeatureChaining = featureChainings.get(featureChainings.size()-1);
@@ -222,7 +227,12 @@ public class TypeUtil {
 	}
 	
 	public static List<Feature> getAllParametersOf(Type type) {
-		return type.getDirectedFeature();
+		List<Feature> parameters = type.getDirectedFeature();
+		if (parameters.isEmpty()) {
+			parameters = EvaluationUtil.getFeature(type).stream().
+					filter(f->f.getDirection()!= null).toList();	
+		}
+		return parameters;
 	}
 	
 	public static List<Feature> getOwnedParametersOf(Type type) {

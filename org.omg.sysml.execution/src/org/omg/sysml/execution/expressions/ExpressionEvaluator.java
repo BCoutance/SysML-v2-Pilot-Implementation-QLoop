@@ -27,10 +27,13 @@ import org.omg.sysml.expressions.functions.LibraryFunction;
 import org.omg.sysml.lang.sysml.Element;
 import org.omg.sysml.lang.sysml.Expression;
 import org.omg.sysml.lang.sysml.Feature;
+import org.omg.sysml.lang.sysml.FeatureTyping;
 import org.omg.sysml.lang.sysml.FeatureValue;
 import org.omg.sysml.lang.sysml.Function;
 import org.omg.sysml.lang.sysml.InvocationExpression;
+import org.omg.sysml.lang.sysml.Membership;
 import org.omg.sysml.lang.sysml.Redefinition;
+import org.omg.sysml.lang.sysml.Specialization;
 import org.omg.sysml.lang.sysml.SysMLFactory;
 import org.omg.sysml.lang.sysml.Type;
 import org.omg.sysml.util.ElementUtil;
@@ -50,25 +53,61 @@ public class ExpressionEvaluator extends ModelLevelExpressionEvaluator {
 	
 	@Override
 	public EList<Element> evaluateInvocation(InvocationExpression expression, Element target) {
-		Function function = expression.getFunction();
-		LibraryFunction libraryFunction = libraryFunctionFactory.getLibraryFunction(function);
-		if (libraryFunction != null) {
-			return libraryFunction.invoke(expression, target, this);
-		} else {
-			Type type = expression.instantiatedType();
-			Expression resultExpression = EvaluationUtil.getResultExpressionFor(type);
-			if (resultExpression == null) {
-				return EvaluationUtil.singletonList(expression);
-			} else {
-				Feature targetFeature = EvaluationUtil.getTargetFeatureFor(target);
-				if (type instanceof Feature) {
-					targetFeature = FeatureUtil.chainFeatures(targetFeature, (Feature)type);
+		Function function = expression.getFunction();		
+		// Considering that isModelLevelEvaluable() should be inherited through specialization (true?), and since it is not applied
+		// when creating the resource, we search for ModelLevelEvaluable functions in the specialized functions (until we are not
+		// specializing functions anymore or we found one) and replace the function by the first ModelLevelEvaluable one found if 
+		// it exists. Beware of the disappearing of redefinitions during specialization in this process. Better solution to be found...
+		if (function != null) {
+			// Why does sometimes the getFunction() result is Evaluation instead of the real function ? 
+			// To avoid it, if Evaluation is caught, always check if there is not another function in the memberships
+			// Beware of the risk of false positives (case where Evaluation is the correct function and not the other one)
+			if (function.getQualifiedName()!= null && function.getQualifiedName().equals("Performances::Evaluation")) {
+				if (expression.instantiatedType() instanceof Function typefunc) {
+					expression.getType().remove(function);
+					expression.getType().add(typefunc);
+					function = typefunc;
 				}
-				EList<Element> results = evaluate(resultExpression, 
-						FeatureUtil.chainFeatures(targetFeature, instantiateInvocation(expression, targetFeature)));
-				return results == null? EvaluationUtil.singletonList(resultExpression): results;
+				else {
+					for (Membership memb : expression.getOwnedMembership()) {
+						if (memb.getTarget().get(0) instanceof Function tgtfunc) {
+							expression.getType().remove(function);
+							expression.getType().add(tgtfunc);
+							function = tgtfunc;
+						}
+					}
+				}
+			}
+			LibraryFunction libraryFunction = libraryFunctionFactory.getLibraryFunction(function);
+
+			EList<Specialization> FuncSpecialization = function.getOwnedSpecialization();
+			while (FuncSpecialization.size()>0 && libraryFunction==null) {
+				if (FuncSpecialization.get(0).getTarget().get(0) instanceof Function f) {
+					libraryFunction = libraryFunctionFactory.getLibraryFunction(f);
+					FuncSpecialization = f.getOwnedSpecialization();
+				}
+				else break;
+			}
+			if (libraryFunction != null) {
+				return libraryFunction.invoke(expression, target, this);
 			}
 		}
+		 
+		Type type = expression.instantiatedType(); // New version, creates issues with collect select and reduce
+		if (type == null) type = expression.getOwnedTyping().stream().map(FeatureTyping::getType).findFirst().orElse(null);
+		Expression resultExpression = EvaluationUtil.getResultExpressionFor(type);
+		if (resultExpression == null) {
+			return EvaluationUtil.singletonList(expression);
+		} else {
+			Feature targetFeature = EvaluationUtil.getTargetFeatureFor(target);
+			if (type instanceof Feature) {
+				targetFeature = FeatureUtil.chainFeatures(targetFeature, (Feature)type);
+			}
+			InvocationExpression instantiatedInvocation = instantiateInvocation(expression, targetFeature);
+			Feature chainedFeatures = FeatureUtil.chainFeatures(targetFeature, instantiatedInvocation);
+			EList<Element> results = evaluate(resultExpression, chainedFeatures);
+			return results == null? EvaluationUtil.singletonList(resultExpression): results;
+		}	
 	}
 	
 	protected InvocationExpression instantiateInvocation(InvocationExpression expression, Element target) {
@@ -76,8 +115,20 @@ public class ExpressionEvaluator extends ModelLevelExpressionEvaluator {
 		
 		// Copy instantiatedType from original expression.
 		Type instantiatedType = expression.getInstantiatedType();
+		if (instantiatedType==null) {
+			instantiatedType = expression.getOwnedTyping().stream().map(FeatureTyping::getType).findFirst().orElse(null); //still necessary ?
+		}
 		NamespaceUtil.addMemberTo(instantiation, instantiatedType);
 		
+		// Addition to keep track of the original expression's function. Useful for later search for bound 
+		// features in EvaluateFeature for example  
+		Function function = expression.getFunction();
+		if (function != null) {
+			FeatureTyping newTyping = SysMLFactory.eINSTANCE.createFeatureTyping();
+			newTyping.setType(function);
+			newTyping.setTypedFeature(instantiation);
+			instantiation.getOwnedRelationship().add(newTyping);
+		}
 		// Add implicit generalization.
 		ElementUtil.transform(instantiation);
 		
